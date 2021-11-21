@@ -6,13 +6,26 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
-//azure kinect sdk ∫“∑Øø¿±‚
 #include <k4a/k4a.h>
+#include <math.h>
 
 using namespace std;
 
+#ifdef __linux__
+int _stricmp(const char* a, const char* b) {
+    int ca, cb;
+    do {
+        ca = (unsigned char)*a++;
+        cb = (unsigned char)*b++;
+        ca = tolower(toupper(ca));
+        cb = tolower(toupper(cb));
+    } while (ca == cb && ca != '\0');
+    return ca - cb;
+}
+#endif
+
 // Enable HAVE_OPENCV macro after you installed opencv and opencv contrib modules (kinfu, viz), please refer to README.md
-//opencv ∂Û¿Ã∫Í∑Ø∏Æ ∫“∑Øø¿±‚
+// #define HAVE_OPENCV „ÅÆ„Ç≥„É°„É≥„Éà„Ç¢„Ç¶„Éà„ÇíÂ§ñ„Åô
 #define HAVE_OPENCV
 #ifdef HAVE_OPENCV
 #include <opencv2/core.hpp>
@@ -24,13 +37,13 @@ using namespace cv;
 #endif
 
 #ifdef HAVE_OPENCV
-void initialize_kinfu_params(kinfu::Params &params,
-                             const int width,
-                             const int height,
-                             const float fx,
-                             const float fy,
-                             const float cx,
-                             const float cy)
+void initialize_kinfu_params(kinfu::Params& params,
+    const int width,
+    const int height,
+    const float fx,
+    const float fy,
+    const float cx,
+    const float cy)
 {
     const Matx33f camera_matrix = Matx33f(fx, 0.0f, cx, 0.0f, fy, cy, 0.0f, 0.0f, 1.0f);
     params.frameSize = Size(width, height);
@@ -38,7 +51,7 @@ void initialize_kinfu_params(kinfu::Params &params,
     params.depthFactor = 1000.0f;
 }
 
-template<typename T> Mat create_mat_from_buffer(T *data, int width, int height, int channels = 1)
+template<typename T> Mat create_mat_from_buffer(T* data, int width, int height, int channels = 1)
 {
     Mat mat(height, width, CV_MAKETYPE(DataType<T>::type, channels));
     memcpy(mat.data, data, width * height * channels * sizeof(T));
@@ -74,7 +87,6 @@ typedef enum
 } interpolation_t;
 
 // Compute a conservative bounding box on the unit plane in which all the points have valid projections
-// ∏µÁ ¡°¿Ã ¿Ø»ø«— projection¿ª ∞Æ¥¬ ¥‹¿ß ∆Ú∏Èø°º≠ conservative(?) πŸøÓµ˘ π⁄Ω∫ ∞ËªÍ
 static void compute_xy_range(const k4a_calibration_t* calibration,
     const k4a_calibration_type_t camera,
     const int width,
@@ -344,7 +356,7 @@ static void remap(const k4a_image_t src, const k4a_image_t lut, k4a_image_t dst,
     }
 }
 
-void PrintUsage() 
+void PrintUsage()
 {
     printf("Usage: kinfu_example.exe [Optional]<Mode>\n");
     printf("    Mode: nfov_unbinned(default), wfov_2x2binned, wfov_unbinned, nfov_2x2binned\n");
@@ -440,11 +452,11 @@ int main(int argc, char** argv)
     interpolation_t interpolation_type = INTERPOLATION_BILINEAR_DEPTH;
 
 #ifdef HAVE_OPENCV
+    // Ê≠£Â∏∏„Å´Âãï‰Ωú„Åó„Å™„ÅÑÂ†¥Âêà„ÅØ setUseOptimized „ÅÆÂºïÊï∞„Çí false „Å´„Åó„Å¶„Åø„Çã
     setUseOptimized(true);
 
     // Retrieve calibration parameters
-    //calibration«— ∞·∞˙∞™µÈ¿ª ∞°¡Æø»
-    k4a_calibration_intrinsic_parameters_t *intrinsics = &calibration.depth_camera_calibration.intrinsics.parameters;
+    k4a_calibration_intrinsic_parameters_t* intrinsics = &calibration.depth_camera_calibration.intrinsics.parameters;
     const int width = calibration.depth_camera_calibration.resolution_width;
     const int height = calibration.depth_camera_calibration.resolution_height;
 
@@ -455,8 +467,6 @@ int main(int argc, char** argv)
         *params, width, height, pinhole.fx, pinhole.fy, pinhole.px, pinhole.py);
 
     // Distortion coefficients
-    // Calibration«— ∞·∞˙∞™µÈ¿ª distCoeffs «‡∑ƒø° ¿˙¿Â
-    // k1, k2: radial distortion∞Ëºˆ p1, p2: tangential distortion ∞Ëºˆ
     Matx<float, 1, 8> distCoeffs;
     distCoeffs(0) = intrinsics->param.k1;
     distCoeffs(1) = intrinsics->param.k2;
@@ -469,10 +479,10 @@ int main(int argc, char** argv)
 
     k4a_image_t lut = NULL;
     k4a_image_create(K4A_IMAGE_FORMAT_CUSTOM,
-                     pinhole.width,
-                     pinhole.height,
-                     pinhole.width * (int)sizeof(coordinate_t),
-                     &lut);
+        pinhole.width,
+        pinhole.height,
+        pinhole.width * (int)sizeof(coordinate_t),
+        &lut);
 
     create_undistortion_lut(&calibration, K4A_CALIBRATION_TYPE_DEPTH, &pinhole, lut, interpolation_type);
 
@@ -515,15 +525,15 @@ int main(int argc, char** argv)
         }
 
         k4a_image_create(K4A_IMAGE_FORMAT_DEPTH16,
-                         pinhole.width,
-                         pinhole.height,
-                         pinhole.width * (int)sizeof(uint16_t),
-                         &undistorted_depth_image);
+            pinhole.width,
+            pinhole.height,
+            pinhole.width * (int)sizeof(uint16_t),
+            &undistorted_depth_image);
         remap(depth_image, lut, undistorted_depth_image, interpolation_type);
 
         // Create frame from depth buffer
-        uint8_t *buffer = k4a_image_get_buffer(undistorted_depth_image);
-        uint16_t *depth_buffer = reinterpret_cast<uint16_t *>(buffer);
+        uint8_t* buffer = k4a_image_get_buffer(undistorted_depth_image);
+        uint16_t* depth_buffer = reinterpret_cast<uint16_t*>(buffer);
         UMat undistortedFrame;
         create_mat_from_buffer<uint16_t>(depth_buffer, width, height).copyTo(undistortedFrame);
 
@@ -573,16 +583,16 @@ int main(int argc, char** argv)
 
         // Key controls
         const int32_t key = waitKey(5);
-        if (key == 'r') //reset mode
+        if (key == 'r')
         {
             printf("Reset KinectFusion\n");
             kf->reset();
         }
-        else if (key == 'v') //visualization mode
+        else if (key == 'v')
         {
             renderViz = true;
         }
-        else if (key == 'w') //write mode¿œ ∞ÊøÏ ply∆ƒ¿œ∑Œ ¿˙¿Â
+        else if (key == 'w')
         {
             // Output the fused point cloud from KinectFusion
             Mat out_points;
